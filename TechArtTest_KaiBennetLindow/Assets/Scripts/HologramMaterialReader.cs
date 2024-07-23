@@ -35,7 +35,6 @@ namespace TechArtTest {
             }
             
             hologrammEffect.SetVector4("SkinnedMeshAlbedoTint", skinnedMeshRenderer.sharedMaterial.GetColor("_AlbedoTint"));
-
             if (rayOriginTransform != null) {
                 hologrammEffect.SetVector3("RayOrigin", rayOriginTransform.position);
             }

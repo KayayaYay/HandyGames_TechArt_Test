@@ -15,7 +15,7 @@ namespace TechArtTest.Editor {
     internal sealed class WaterfallControlsEditor : UnityEditor.Editor{
         public override VisualElement CreateInspectorGUI() {
             VisualElement root = new();
-            Button generateButton = new(GenerateWaterfallMesh);
+            Button generateButton = new(GenerateWaterfallAssets);
             generateButton.text = "Generate Waterfall";
 
             PropertyField waterCollisionLayerField = new();
@@ -29,17 +29,24 @@ namespace TechArtTest.Editor {
             
             PropertyField iterationsYField = new();
             iterationsYField.BindProperty(serializedObject.FindProperty("iterationsY"));
+
+            PropertyField assetField = new();
+            assetField.BindProperty(serializedObject.FindProperty("pointCloudAsset"));
             
             root.Add(waterCollisionLayerField);
             root.Add(widthField);
             root.Add(iterationsXField);
             root.Add(iterationsYField);
+            root.Add(assetField);
             root.Add(generateButton);
             
             return root;
         }
 
-        private void GenerateWaterfallMesh() {
+        /// <summary>
+        /// Generates all needed Assets for the Waterfall VFX.
+        /// </summary>
+        private void GenerateWaterfallAssets() {
             if (target is WaterfallControls controls) {
                 string creationPath;
                 if (controls.PointCloudAsset == null) {
@@ -53,10 +60,6 @@ namespace TechArtTest.Editor {
                     creationPath = Path.GetRelativePath(Application.dataPath, Path.GetDirectoryName(AssetDatabase.GetAssetPath(controls.PointCloudAsset)));
                 }
                 
-                /*if (controls.WaterfallMesh == null) {
-                    controls.WaterfallMesh = null;
-                }*/
-                
                 controls.PointCloudAsset.Points = GeneratePoints(controls);
                 GenerateMesh(controls, AssetDatabase.GetAssetPath(controls.PointCloudAsset));
                 GenerateFlowMap(controls, AssetDatabase.GetAssetPath(controls.PointCloudAsset));
@@ -64,6 +67,10 @@ namespace TechArtTest.Editor {
             }
         }
 
+        /// <summary>
+        /// Generates a Texture used to add Foam after the Waterfall collided with something
+        /// </summary>
+        /// <param name="path">The File path the Texture should be saved to. Automatically adds "_FlowMap" to the Filename</param>
         private void GenerateFlowMap(WaterfallControls controls, string path) {
             Spline spline = controls.WaterfallSpline.Spline;
             if (spline == null) {
@@ -75,7 +82,7 @@ namespace TechArtTest.Editor {
 
             Texture2D map;
             int width = xIterations * 2 + 1;
-            int height = Mathf.FloorToInt(width * spline.CalculateLength(controls.transform.localToWorldMatrix) / Mathf.Max(1, controls.Width));
+            int height = Mathf.FloorToInt(width * spline.CalculateLength(controls.transform.localToWorldMatrix) / Mathf.Max(1, controls.HalfWidth));
             if (controls.FlowMap != null) {
                 map = controls.FlowMap;
                 if (map.width != width || map.height != height) {
@@ -103,7 +110,7 @@ namespace TechArtTest.Editor {
                     float deltaX = (float)x / xIterations;
                     Vector3 origin = controls.transform.TransformPoint(spline.EvaluatePosition(t));
                     Vector3 direction = (Vector3)controls.transform.TransformPoint(spline.EvaluatePosition(tn)) - origin;
-                    Ray ray = new(origin + controls.transform.right * deltaX * controls.Width, direction.normalized);
+                    Ray ray = new(origin + controls.transform.right * deltaX * controls.HalfWidth, direction.normalized);
                     if (Physics.Raycast(ray, out RaycastHit hit, direction.magnitude, controls.WaterCollisionLayer)) {
                         float uvX = (float)(x + xIterations) / width;
                         float stepYDelta = 1.0f / (spline.Count * yIterations);
@@ -116,10 +123,9 @@ namespace TechArtTest.Editor {
             }
             map.Apply();
 
-            Color[] flowPix = map.GetPixels(0, 0, width, height);
             // Unoptimized Flow Map Calculation due to lack of time (it only runs in Editor)
+            Color[] flowPix = map.GetPixels(0, 0, width, height);
             int flowRangeDown = 15 * controls.IterationsY;
-            //int flowRangeUp = 10;
             for (int x = 0; x < width; x++) {
                 for (int y = 0; y < height; y++) {
                     Color pix = flowPix[x + y * width];
@@ -131,19 +137,15 @@ namespace TechArtTest.Editor {
                                 map.SetPixel(x,pY, new Color(pix.r, Mathf.Max(pix.g, 0.5f + (1.0f - (float)i / flowRangeDown)*0.5f), Mathf.Max(pix.g, 0.5f + (1.0f - (float)i / flowRangeDown)*0.5f), 1));
                             }
                         }
-                        /*for (int i = 0; i < flowRangeUp; i++) {
-                            int nY = y - i;
-                            if (nY > 0) {
-                                //Color writePixel = flowPix[x + nY * width];
-                                //map.SetPixel(x,nY, new Color(pix.r, Mathf.Min(pix.g, 0.5f - (1.0f - (float)i / flowRangeUp)*0.5f), writePixel.b, 1));
-                            }
-                        }*/
                     }
                 }
             }
             map.Apply();
         }
 
+        /// <summary>
+        /// Generates a List of Points along the Waterfall where it hits Colliders
+        /// </summary>
         private List<Point> GeneratePoints(WaterfallControls controls) {
             Spline spline = controls.WaterfallSpline.Spline;
             if (spline == null) {
@@ -160,7 +162,7 @@ namespace TechArtTest.Editor {
                     float deltaX = (float)x / xIterations;
                     Vector3 origin = controls.transform.TransformPoint(spline.EvaluatePosition(t));
                     Vector3 direction = (Vector3)controls.transform.TransformPoint(spline.EvaluatePosition(tn)) - origin;
-                    Ray ray = new(origin + controls.transform.right * deltaX * controls.Width, direction.normalized);
+                    Ray ray = new(origin + controls.transform.right * deltaX * controls.HalfWidth, direction.normalized);
                     if (Physics.Raycast(ray, out RaycastHit hit, direction.magnitude, controls.WaterCollisionLayer)) {
                         Vector3 normal = controls.transform.InverseTransformDirection(Quaternion.AngleAxis(-90, controls.transform.right) * Vector3.ProjectOnPlane(direction, controls.transform.right).normalized);
                         points.Add(new(controls.transform.InverseTransformPoint(hit.point), 
@@ -174,6 +176,10 @@ namespace TechArtTest.Editor {
             return points;
         }
 
+        /// <summary>
+        /// Generates the Mesh of the Waterfall along the Spline
+        /// </summary>
+        /// <param name="path">The File path the Mesh should be saved to. Automatically adds "_Mesh" to the Filename</param>
         private void GenerateMesh(WaterfallControls controls, string path) {
             Spline spline = controls.WaterfallSpline.Spline;
             if (spline == null) {
@@ -208,7 +214,7 @@ namespace TechArtTest.Editor {
                 for (int x = -xIterations; x <= xIterations; x++) {
                     float deltaX = (float)x / xIterations;
                     Vector3 origin = controls.transform.TransformPoint(spline.EvaluatePosition(t));
-                    Vector3 vertex = controls.transform.InverseTransformPoint(origin + controls.transform.right * deltaX * controls.Width);
+                    Vector3 vertex = controls.transform.InverseTransformPoint(origin + controls.transform.right * deltaX * controls.HalfWidth);
                     vertices.Add(vertex);
                     
                     // Calculate Normal
@@ -226,7 +232,7 @@ namespace TechArtTest.Editor {
                     
                     uv0.Add(new((deltaX + 1) * 0.5f, t));
                     uv1_Curvature_Length.Add(new((y == 0 || y == spline.Count * yIterations) ? 0 : spline.EvaluateCurvature(t), length - length * t));
-                    uv2_Width.Add(new((deltaX + 1) * 0.5f * controls.Width, t));
+                    uv2_Width.Add(new((deltaX + 1) * 0.5f * controls.HalfWidth, t));
                     
                     if (x < xIterations && y < spline.Count * yIterations) {
                         indices.Add(xIterations + x + y * vertexCountX);
@@ -245,6 +251,10 @@ namespace TechArtTest.Editor {
             mesh.RecalculateNormals();
         }
         
+        /// <summary>
+        /// Writes a pcache File based on the given <see cref="PointCloudAsset"/>
+        /// </summary>
+        /// <param name="asset">The <see cref="PointCloudAsset"/> the File should be created from.</param>
         public void UpdateFile(PointCloudAsset asset) {
             if (asset == null) {
                 Debug.LogError("Asset is null");

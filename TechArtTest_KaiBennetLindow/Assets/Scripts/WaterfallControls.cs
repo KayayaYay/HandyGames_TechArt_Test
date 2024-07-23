@@ -15,14 +15,23 @@ namespace TechArtTest {
         [SerializeField] private LayerMask waterCollisionLayer;
         public LayerMask WaterCollisionLayer => waterCollisionLayer;
         
+        /// <summary>
+        /// The width of the Waterfall
+        /// </summary>
         [SerializeField] private float width = 1;
-        public float Width => width;
+        public float HalfWidth => width * 0.5f;
         
-        [SerializeField, Min(1)] private int iterationsY = 5;
-        public int IterationsY => iterationsY;
-        
+        /// <summary>
+        /// Waterfall Mesh width Iterations
+        /// </summary>
         [SerializeField, Min(1)] private int iterationsX = 5;
         public int IterationsX => iterationsX;
+        
+        /// <summary>
+        /// Waterfall Mesh Iterations along the Spline
+        /// </summary>
+        [SerializeField, Min(1)] private int iterationsY = 5;
+        public int IterationsY => iterationsY;
         
         [SerializeField] private PointCloudAsset pointCloudAsset;
         public PointCloudAsset PointCloudAsset{
@@ -63,7 +72,7 @@ namespace TechArtTest {
         private void Start() {
             SetVisualEffectProperties();
         }
-
+        
         private void SetVisualEffectProperties() {
             Spline spline = WaterfallSpline?.Spline;
             if (waterfallEffect == null || spline == null) {
@@ -72,8 +81,8 @@ namespace TechArtTest {
 
             Vector3 endCenter = spline.EvaluatePosition(1);
             Vector3 normalCenter = spline.EvaluatePosition(((float)spline.Count - 1) / spline.Count);
-            waterfallEffect.SetVector3("BasePointA", endCenter + new Vector3(Width, 0, 0));
-            waterfallEffect.SetVector3("BasePointB", endCenter - new Vector3(Width, 0, 0));
+            waterfallEffect.SetVector3("BasePointA", endCenter + new Vector3(HalfWidth, 0, 0));
+            waterfallEffect.SetVector3("BasePointB", endCenter - new Vector3(HalfWidth, 0, 0));
             waterfallEffect.SetVector3("BaseNormal", Vector3.Normalize(normalCenter - endCenter));
         }
     }
